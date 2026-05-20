@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Нейросетевой чат - Клиент</title>
+   <link rel="stylesheet" href="style.css">
+     <!--SignalR -->
+   <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/7.0.5/signalr.min.js"></script>
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-header">
+           
+ 
+            <h1> Нейросетевой чат</h1>
+            <div class="status" id="status"> Подключение к серверу...</div>
+        </div>
+
+        <div class="chat-messages" id="chatMessages">
+            <div class="message-system"> Ожидание подключения к серверу...</div>
+        </div>
+        
+        <div class="input-area">
+            <input type="text" id="messageInput" placeholder="Введите сообщение..." maxlength="500">
+            <button class="btn-primary" id="sendBtn"> Отправить</button>
+            <button class="btn-warning" id="anonymousBtn"> Анонимно</button>
+        </div>
+        
+        <div class="system-prompt-info" id="systemPromptInfo">
+            Системный промпт загружается...
+        </div>
+    </div>
+ <script src="script.js"></script>          
+</body>
+</html>

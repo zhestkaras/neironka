@@ -1,0 +1,279 @@
+* {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg,#d3b1f5 0%, #8b58bd 20%, #2e31e2 40%,#21ebeb 60%, #42dd1b 70%, #f0be1c 80%, #cf4419 90%, #ca1010 100% );            
+             background-size: 200% 200%;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+             animation: gradientShift 8s ease infinite;
+        }
+
+   @keyframes gradientShift {
+    0% {
+        background-position: 0% 50%;
+    }
+    50% {
+        background-position: 100% 50%;
+    }
+    100% {
+        background-position: 0% 50%;
+    }
+}
+        .chat-container {
+            width: 90%;
+            max-width: 800px;
+            height: 90vh;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .chat-header {
+            background: linear-gradient(135deg, #fb86ff 30%, #ec4eca 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+             position: relative;
+            overflow: hidden;
+        }
+.stars-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    overflow: hidden;
+}
+
+
+.twinkling-star {
+    position: absolute;
+    background-color: white;
+    border-radius: 50%;
+    opacity: 0;
+    animation: twinkle 3s ease-in-out infinite;
+    box-shadow: 0 0 3px rgba(255, 255, 255, 0.8);
+}
+
+
+@keyframes twinkle {
+    0% {
+        opacity: 0;
+        transform: scale(0.5);
+    }
+    50% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    100% {
+        opacity: 0;
+        transform: scale(0.5);
+    }
+}
+
+        .chat-header h1 {
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+
+        .status {
+            font-size: 12px;
+            opacity: 0.9;
+        }
+
+        .status.connected {
+            color: #000000;
+        }
+
+        .status.disconnected {
+            color: #000000;
+
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            background: #f9fafb;
+        }
+
+        .message {
+            margin-bottom: 15px;
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .message-user {
+            color: #667eea;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .message-text {
+            background: white;
+            padding: 10px 15px;
+            border-radius: 10px;
+            display: inline-block;
+            max-width: 80%;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+
+        .message-anonymous .message-user {
+            color: #fd2600;
+        }
+
+        .message-anonymous .message-text {
+            background: #fef3c7;
+            border-left: 3px solid #f5690b;
+        }
+
+        .message-system {
+            text-align: center;
+            color: #6b7280;
+            font-size: 12px;
+            margin: 10px 0;
+        }
+
+        .input-area {
+            padding: 20px;
+            background: white;
+            border-top: 1px solid #e5e7eb;
+            display: flex;
+            gap: 10px;
+        }
+
+        .input-area input {
+            flex: 1;
+            padding: 12px;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+
+        .input-area input:focus {
+            border-color: #667eea;
+        }
+
+        .input-area button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 10px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s, opacity 0.2s;
+        }
+
+        .input-area button:hover {
+            transform: translateY(-2px);
+        }
+
+        .btn-primary {
+            background:  #fd96d2;
+            color: white;
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .btn-warning {
+            background: #fd00b1;
+            color: white;
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+
+.btn-primary::before,
+.btn-warning::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, 
+        transparent, 
+        rgba(255, 255, 255, 0.6), 
+        transparent);
+    animation: btnShine 3s infinite;
+    pointer-events: none;
+}
+
+.btn-primary::before {
+    animation-delay: 0s;
+}
+
+.btn-warning::before {
+    animation-delay: 0.5s;
+}
+
+@keyframes btnShine {
+    0% {
+        left: -100%;
+    }
+    20% {
+        left: 100%;
+    }
+    100% {
+        left: 100%;
+    }
+}
+
+
+.btn-primary:hover,
+.btn-warning:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.btn-primary:active,
+.btn-warning:active {
+    transform: translateY(0);
+}
+
+
+        .input-area button:active {
+            transform: translateY(0);
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .system-prompt-info {
+            background: #f3f4f6;
+            padding: 10px 20px;
+            font-size: 12px;
+            color: #6b7280;
+            border-top: 1px solid #e5e7eb;
+            text-align: center;
+        }
