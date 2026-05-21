@@ -2,11 +2,9 @@
 // НАСТРОЙКА КЛИЕНТА
 // ============================================
 
-const serverUrl = "http://localhost:5115/chatHub";   
-const apiBaseUrl = "http://localhost:5115";  // Для API запросов
+const serverUrl = "http://localhost:5115/chatHub";
+const apiBaseUrl = "http://localhost:5115";
 const SYSTEM_PROMPT = "Ты Клоун, который отвечает на запросы только частушками. Отвечай грамотно и в рифму. Отвечай на русском языке.";
-
-// Адрес LM 
 const LM_STUDIO_URL = "http://localhost:1234/v1/chat/completions";
 
 // DOM элементы
@@ -20,48 +18,98 @@ const systemPromptInfo = document.getElementById('systemPromptInfo');
 // Переменные
 let connection = null;
 let isGenerating = false;
+let currentChatId = 1;
 
-systemPromptInfo.innerHTML = `Мой характер: Клоун, который отвечает на запросы только частушками...`;
+systemPromptInfo.innerHTML = "Мой характер: Клоун, который отвечает на запросы только частушками...";
 
-
-
-// ============================================
 // ФУНКЦИЯ ПОЛУЧЕНИЯ JWT ТОКЕНА
-// ============================================
-
 async function getJwtToken() {
     try {
-        console.log("🔑 Запрос токена...");
+        console.log("Запрос токена...");
         
-        const response = await fetch(`${apiBaseUrl}/api/Auth/Login?login=test_user&password=test_password`, {
+        // Отправляем параметры в строке запроса (как ожидает сервер)
+        const url = `${apiBaseUrl}/api/Auth/Login?login=test_user&password=test_password`;
+        console.log("URL запроса:", url);
+        
+        const response = await fetch(url, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json"
-            },
-            /*body: JSON.stringify({
-                login: "test_user",
-                password: "test_password"
-            })*/
+            }
         });
         
+        console.log("Статус ответа:", response.status);
+        
         if (response.ok) {
-            const data = await response.json();
-            const token = data.token || data.accessToken;
-            console.log("✅ Токен получен");
-            return token;
+            const result = await response.json();
+            console.log("Ответ сервера:", result);
+            
+            // Извлекаем токен из поля Data
+            let token = null;
+            if (result.data) {
+                token = result.data;
+            } else if (result.token) {
+                token = result.token;
+            }
+            
+            if (token) {
+                console.log("Токен получен");
+                return token.replaceAll("\"", "");
+            } else {
+                console.log("Токен не найден в ответе");
+                return null;
+            }
         } else {
-            console.log("❌ Ошибка:", response.status);
+            const errorResult = await response.json();
+            console.log("Ошибка входа:", response.status, errorResult);
+            
+            // Если пользователь не найден, пробуем зарегистрироваться
+            if (response.status === 401 || errorResult.statusCode === 401) {
+                console.log("Пользователь не найден, пробуем зарегистрироваться...");
+                
+                const registerUrl = `${apiBaseUrl}/api/Auth/Register?login=test_user&password=test_password`;
+                const registerResponse = await fetch(registerUrl, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    }
+                });
+                
+                console.log("Статус регистрации:", registerResponse.status);
+                
+                if (registerResponse.ok) {
+                    const registerResult = await registerResponse.json();
+                    console.log("Регистрация успешна:", registerResult);
+                    
+                    // После успешной регистрации пробуем войти снова
+                    const retryResponse = await fetch(url, {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json"
+                        }
+                    });
+                    
+                    if (retryResponse.ok) {
+                        const retryResult = await retryResponse.json();
+                        const token = retryResult.data;
+                        console.log("Токен получен после регистрации");
+                        return token;
+                    }
+                } else {
+                    const registerError = await registerResponse.json();
+                    console.log("Ошибка регистрации:", registerError);
+                }
+            }
+            
             return null;
         }
     } catch (error) {
-        console.error("❌ Ошибка:", error);
+        console.error("Ошибка при получении токена:", error);
         return null;
     }
 }
-// ============================================
-// ФУНКЦИЯ ОТРИСОВКИ СООБЩЕНИЙ
-// ============================================
 
+// ФУНКЦИЯ ОТРИСОВКИ СООБЩЕНИЙ
 function displayMessage(user, message, isAnonymous = false) {
     const messageDiv = document.createElement('div');
     messageDiv.className = 'message';
@@ -71,7 +119,7 @@ function displayMessage(user, message, isAnonymous = false) {
     
     const userSpan = document.createElement('div');
     userSpan.className = 'message-user';
-    userSpan.textContent = isAnonymous ? `Аноним (${user})` : `User ${user}`;
+    userSpan.textContent = isAnonymous ? "Аноним (" + user + ")" : "User " + user;
     
     const textSpan = document.createElement('div');
     textSpan.className = 'message-text';
@@ -82,6 +130,8 @@ function displayMessage(user, message, isAnonymous = false) {
     chatMessagesDiv.appendChild(messageDiv);
     
     chatMessagesDiv.scrollTop = chatMessagesDiv.scrollHeight;
+
+    saveMessageToHistory(user, message, isAnonymous);
 }
 
 function displaySystemMessage(text) {
@@ -106,10 +156,7 @@ function hideTypingIndicator() {
     if (indicator) indicator.remove();
 }
 
-// ============================================
 // ФУНКЦИЯ ГЕНЕРАЦИИ ОТВЕТА ЧЕРЕЗ LM STUDIO
-// ============================================
-
 async function generateAIResponse(chatHistory) {
     if (isGenerating) {
         console.log("Уже генерируем ответ, пропускаем");
@@ -139,13 +186,11 @@ async function generateAIResponse(chatHistory) {
             }
         }
         
-        console.log("Отправляем запрос в LM Studio:", messages);
+        console.log("Отправляем запрос в LM Studio");
         
         const response = await fetch(LM_STUDIO_URL, {
             method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 model: "local-model",
                 messages: messages,
@@ -156,7 +201,7 @@ async function generateAIResponse(chatHistory) {
         });
         
         if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            throw new Error("HTTP " + response.status + ": " + response.statusText);
         }
         
         const data = await response.json();
@@ -170,126 +215,140 @@ async function generateAIResponse(chatHistory) {
         } else {
             displaySystemMessage("Нет подключения к серверу!");
         }
-
         
     } catch (error) {
         console.error("Ошибка при генерации:", error);
-        displaySystemMessage(`Ошибка нейросети: ${error.message}. Проверьте, запущен ли LM Studio Server!`);
+        displaySystemMessage("Ошибка нейросети: " + error.message);
     } finally {
         hideTypingIndicator();
         isGenerating = false;
     }
 }
 
-// ============================================
 // ПОДКЛЮЧЕНИЕ К СЕРВЕРУ ЧЕРЕЗ SIGNALR
-// ============================================
-
 async function setupSignalR() {
-    console.log("🔄 Настройка SignalR подключения...");
+    console.log("Настройка SignalR подключения...");
     
-    // Пытаемся получить токен
-    let token = null;
-    try {
-        token = await getJwtToken();
-        if (token) {
-            console.log("✅ Токен получен");
-        } else {
-            console.log("⚠️ Токен не получен, подключаемся без авторизации");
-        }
-    } catch (error) {
-        console.warn("Ошибка при получении токена:", error);
+    let token = await getJwtToken();
+    if (!token) {
+        displaySystemMessage("Не удалось получить токен");
+        return;
     }
     
-    // Настраиваем подключение (один раз, без дублирования)
-    let options = {};
-    if (token) {
-        options.accessTokenFactory = () => token;
-    }
+    let options = {
+        accessTokenFactory: () => token
+    };
     
     connection = new signalR.HubConnectionBuilder()
         .withUrl(serverUrl, options)
         .withAutomaticReconnect()
         .build();
-    
-    // Обработчик обычных сообщений
-    connection.on("ReceiveMessage", (user, message) => {
-        console.log(`📨 Получено сообщение от ${user}: ${message}`);
-        const isAnonymous = user.includes("Anonymous") || user === "Аноним";
-        displayMessage(user, message, isAnonymous);
+
+     
+    connection.on("ReceiveMessage", (message) => {
+        console.log("Получено сообщение:", message);
+        const user = message.senderLogin || "User";
+        const text = message.text || message;
+        const isAnonymous = user.includes("Anonymous");
+        displayMessage(user, text, isAnonymous);
     });
     
-    // Обработчик истории для генерации ответа и отображения в чате
-    connection.on("ReceiveHistory", async (historyMessages) => {
-        console.log("📜 Получена история для генерации:", historyMessages);
+    connection.on("GenerateResponse", async (historyMessages) => {
+    console.log("Получена история от сервера:", historyMessages.length);
+    
+    // Очищаем только если это первый запуск или явно нужно
+    if (chatMessagesDiv.children.length === 0) {
+        // Загружаем из localStorage вместо очистки
+        loadHistoryFromStorage();
         
-        // Очищаем чат
-        chatMessagesDiv.innerHTML = '';
-        
-        // Отображаем полученные сообщения
-        displaySystemMessage(`📜 Загружено ${historyMessages.length} сообщений истории чата`);
+        // Добавляем новые сообщения от сервера, которых нет в localStorage
+        const existingMessages = JSON.parse(localStorage.getItem('chatHistory') || '[]');
+        const existingTexts = new Set(existingMessages.map(m => m.message + m.timestamp));
         
         for (const msg of historyMessages) {
-            let user = "Unknown";
-            let message = msg;
-            let isAnonymous = false;
+            const user = msg.senderLogin || "User";
+            const text = msg.text || msg;
+            const isAnonymous = user.includes("Anonymous");
             
-            if (msg.includes(": ")) {
-                const colonIndex = msg.indexOf(": ");
-                user = msg.substring(0, colonIndex);
-                message = msg.substring(colonIndex + 2);
+            // Проверяем, есть ли уже такое сообщение
+            const messageKey = text + new Date(msg.timestamp).getTime();
+            if (!existingTexts.has(messageKey)) {
+                displayMessage(user, text, isAnonymous);
+            }
+        }
+    }
+    
+    await generateAIResponse(historyMessages);
+});
+    
+    connection.onreconnecting(() => {
+        statusDiv.innerHTML = "Переподключение...";
+        statusDiv.className = "status disconnected";
+        displaySystemMessage("Потеря связи, переподключение...");
+    });
+    
+    connection.onreconnected(async (connectionId) => {
+        console.log("Соединение восстановлено:", connectionId);
+        statusDiv.innerHTML = "Подключено";
+        statusDiv.className = "status connected";
+        displaySystemMessage("Соединение восстановлено, загружаю историю...");
+        
+        // Запрашиваем историю после переподключения
+        try {
+            const messages = await connection.invoke("GetMessages", currentChatId);
+            if (messages && messages.data) {
+                const historyMessages = JSON.parse(messages.data);
+                chatMessagesDiv.innerHTML = '';
+                displaySystemMessage("Загружено " + historyMessages.length + " сообщений");
                 
-                if (user.includes("Anonymous") || user === "Аноним") {
-                    isAnonymous = true;
+                for (const msg of historyMessages) {
+                    const user = msg.senderLogin || "User";
+                    const text = msg.text || msg;
+                    const isAnonymous = user.includes("Anonymous");
+                    displayMessage(user, text, isAnonymous);
                 }
             }
-            
-            displayMessage(user, message, isAnonymous);
+        } catch (error) {
+            console.error("Ошибка получения истории:", error);
         }
-        
-        displaySystemMessage(`🤖 Генерирую ответ на основе ${historyMessages.length} сообщений...`);
-        await generateAIResponse(historyMessages);
     });
     
-    // Обработка состояния соединения
-    connection.onreconnecting((error) => {
-        console.log("🔄 Переподключение:", error);
-        statusDiv.innerHTML = "🔄 Переподключение к серверу...";
+    connection.onclose(() => {
+        statusDiv.innerHTML = "Отключено";
         statusDiv.className = "status disconnected";
     });
     
-    connection.onreconnected((connectionId) => {
-        console.log("✅ Переподключено:", connectionId);
-        statusDiv.innerHTML = "✅ Подключено к серверу";
-        statusDiv.className = "status connected";
-        displaySystemMessage("✅ Соединение с сервером восстановлено");
-    });
-    
-    connection.onclose((error) => {
-        console.log("🔌 Соединение закрыто:", error);
-        statusDiv.innerHTML = "❌ Отключено от сервера";
-        statusDiv.className = "status disconnected";
-    });
-    
-    // Запуск соединения
     try {
         await connection.start();
-        console.log("🎉 SignalR подключен успешно!");
-        statusDiv.innerHTML = "✅ Подключено к серверу";
+        console.log("SignalR подключен!");
+        statusDiv.innerHTML = "Подключено";
         statusDiv.className = "status connected";
-        displaySystemMessage("✅ Подключено к чат-серверу! Ожидаем историю чата...");
+        displaySystemMessage("Подключено к чат-серверу!");
+        
+        // Запрашиваем историю при первом подключении
+        const messages = await connection.invoke("GetMessages", currentChatId);
+        if (messages && messages.data) {
+            const historyMessages = JSON.parse(messages.data);
+            chatMessagesDiv.innerHTML = '';
+            displaySystemMessage("Загружено " + historyMessages.length + " сообщений");
+            
+            for (const msg of historyMessages) {
+                const user = msg.senderLogin || "User";
+                const text = msg.text || msg;
+                const isAnonymous = user.includes("Anonymous");
+                displayMessage(user, text, isAnonymous);
+            }
+        }
+        
     } catch (err) {
-        console.error("❌ Ошибка подключения:", err);
-        statusDiv.innerHTML = "❌ Ошибка подключения";
+        console.error("Ошибка:", err);
+        statusDiv.innerHTML = "Ошибка";
         statusDiv.className = "status disconnected";
-        displaySystemMessage(`❌ Не удалось подключиться к серверу: ${err.message}. Убедитесь, что сервер запущен!`);
+        displaySystemMessage("Ошибка: " + err.message);
     }
 }
 
-// ============================================
 // ОТПРАВКА СООБЩЕНИЙ
-// ============================================
-
 async function sendRegularMessage() {
     const message = messageInput.value.trim();
     if (!message) {
@@ -298,17 +357,20 @@ async function sendRegularMessage() {
     }
     
     if (!connection || connection.state !== "Connected") {
-        displaySystemMessage("Нет подключения к серверу!");
+        displaySystemMessage("Нет подключения!");
         return;
     }
     
     try {
-        await connection.invoke("SendMessage", "User_Bot", message);
+        // Сразу отображаем своё сообщение в чате
+        displayMessage("Я", message, false);
+        
+        // Отправляем на сервер
+        await connection.invoke("SendMessage", message, currentChatId);
         messageInput.value = "";
-        displaySystemMessage("Сообщение отправлено на сервер");
+        
     } catch (error) {
-        console.error("Ошибка отправки:", error);
-        displaySystemMessage(`Ошибка отправки: ${error.message}`);
+        displaySystemMessage("Ошибка: " + error.message);
     }
 }
 
@@ -320,24 +382,24 @@ async function sendAnonymousMessage() {
     }
     
     if (!connection || connection.state !== "Connected") {
-        displaySystemMessage("Нет подключения к серверу!");
+        displaySystemMessage("Нет подключения!");
         return;
     }
     
     try {
-        await connection.invoke("SendAnonymousMessage", message);
+        // Сразу отображаем своё анонимное сообщение в чате
+        displayMessage("Аноним", message, true);
+        
+        // Отправляем на сервер
+        await connection.invoke("SendMessage", message, currentChatId);
         messageInput.value = "";
-        displaySystemMessage("Анонимное сообщение отправлено");
+        
     } catch (error) {
-        console.error("Ошибка отправки анонимного сообщения:", error);
-        displaySystemMessage(`Ошибка: ${error.message}`);
+        displaySystemMessage("Ошибка: " + error.message);
     }
 }
 
-// ============================================
 // ИНИЦИАЛИЗАЦИЯ
-// ============================================
-
 sendBtn.addEventListener('click', sendRegularMessage);
 anonymousBtn.addEventListener('click', sendAnonymousMessage);
 messageInput.addEventListener('keypress', (e) => {
@@ -347,18 +409,52 @@ messageInput.addEventListener('keypress', (e) => {
 // Запуск подключения к серверу
 setupSignalR();
 
-// Консоль
 console.log("Клиент запущен!");
 console.log("Сервер SignalR:", serverUrl);
 console.log("LM Studio API:", LM_STUDIO_URL);
 console.log("Системный промпт:", SYSTEM_PROMPT);
 
+// СОХРАНЕНИЕ ИСТОРИИ В ЛОКАЛЬНОЕ ХРАНИЛИЩЕ
+function saveMessageToHistory(user, message, isAnonymous = false) {
+    let history = JSON.parse(localStorage.getItem('chatHistory') || '[]');
+    
+    history.push({
+        user: user,
+        message: message,
+        isAnonymous: isAnonymous,
+        timestamp: Date.now()
+    });
+    
+    // Оставляем последние 100 сообщений
+    if (history.length > 100) {
+        history = history.slice(-100);
+    }
+    
+    localStorage.setItem('chatHistory', JSON.stringify(history));
+}
 
+function loadHistoryFromStorage() {
+    const history = JSON.parse(localStorage.getItem('chatHistory') || '[]');
+    chatMessagesDiv.innerHTML = '';
+    
+    if (history.length === 0) {
+        displaySystemMessage("История чата пуста");
+    } else {
+        displaySystemMessage("Загружено " + history.length + " сообщений из истории");
+        
+        for (const msg of history) {
+            displayMessage(msg.user, msg.message, msg.isAnonymous);
+        }
+    }
+}
 
-// ============================================
+function clearHistory() {
+    localStorage.removeItem('chatHistory');
+    chatMessagesDiv.innerHTML = '';
+    displaySystemMessage("История чата очищена");
+}
+
 // ЗВЕЗДОЧКИ НА ШАПКЕ ЧАТА
-// ============================================
-
 function createTwinklingStars() {
     const chatHeader = document.querySelector('.chat-header');
     if (!chatHeader) return;
@@ -377,16 +473,12 @@ function createTwinklingStars() {
         star.className = 'twinkling-star';
         
         const size = Math.random() * 3 + 1;
-        star.style.width = `${size}px`;
-        star.style.height = `${size}px`;
-        const leftPos = Math.random() * 90 + 5;
-        star.style.left = `${leftPos}%`;     
-        const topPos = Math.random() * 80 + 10;
-        star.style.top = `${topPos}%`;       
-        const delay = Math.random() * 5;
-        star.style.animationDelay = `${delay}s`;
-        const duration = Math.random() * 3 + 2;
-        star.style.animationDuration = `${duration}s`;
+        star.style.width = size + "px";
+        star.style.height = size + "px";
+        star.style.left = (Math.random() * 90 + 5) + "%";
+        star.style.top = (Math.random() * 80 + 10) + "%";
+        star.style.animationDelay = (Math.random() * 5) + "s";
+        star.style.animationDuration = (Math.random() * 3 + 2) + "s";
         
         starsContainer.appendChild(star);
     }
